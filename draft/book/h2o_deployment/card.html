@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2025-05-04">
+
+<title>R Kubernetes Deployment - Model Card: H2O Stacking Ensemble</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../">
+<link href="../../book/stan_deployment/doc.html" rel="next">
+<link href="../../book/h2o_deployment/doc.html" rel="prev">
+<script src="../../site_libs/quarto-html/quarto.js"></script>
+<script src="../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "overlay",
+  "limit": 15,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="application/json" class="js-hypothesis-config">
+{
+  "theme": "clean",
+  "openSidebar": false
+}
+</script>
+<script async="" src="https://hypothes.is/embed.js"></script>
+<link href="../../site_libs/htmltools-fill-0.5.8.1/fill.css" rel="stylesheet">
+<script src="../../site_libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<script src="../../site_libs/plotly-binding-4.10.4/plotly.js"></script>
+<script src="../../site_libs/typedarray-0.1/typedarray.min.js"></script>
+<script src="../../site_libs/jquery-3.5.1/jquery.min.js"></script>
+<link href="../../site_libs/crosstalk-1.2.1/css/crosstalk.min.css" rel="stylesheet">
+<script src="../../site_libs/crosstalk-1.2.1/js/crosstalk.min.js"></script>
+<link href="../../site_libs/plotly-htmlwidgets-css-2.11.1/plotly-htmlwidgets.css" rel="stylesheet">
+<script src="../../site_libs/plotly-main-2.11.1/plotly-latest.min.js"></script>
+
+
+<link rel="stylesheet" href="../../styles.css">
+<meta property="og:title" content="R Kubernetes Deployment - Model Card: H2O Stacking Ensemble">
+<meta property="og:description" content="">
+<meta property="og:site-name" content="R Kubernetes Deployment">
+<meta name="twitter:title" content="R Kubernetes Deployment - Model Card: H2O Stacking Ensemble">
+<meta name="twitter:description" content="">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar docked">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../../book/h2o_deployment/doc.html">H2O Deployment</a></li><li class="breadcrumb-item"><a href="../../book/h2o_deployment/card.html">Model Card: H2O Stacking Ensemble</a></li></ol></nav>
+      <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+      </a>
+      <button type="button" class="btn quarto-search-button" aria-label="" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal sidebar-navigation docked overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../../">R Kubernetes Deployment</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" aria-expanded="true">
+ <span class="menu-text">Introduction</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Introduction</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" aria-expanded="true">
+ <span class="menu-text">TidyModels Deployment</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/tidymodels_deployment/doc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Tidymodels Deployment</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/tidymodels_deployment/card.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Model Card: Tidymodels Stacking Ensemble</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" aria-expanded="true">
+ <span class="menu-text">H2O Deployment</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/h2o_deployment/doc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">H2O Deployment</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/h2o_deployment/card.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Model Card: H2O Stacking Ensemble</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" aria-expanded="true">
+ <span class="menu-text">Stan Deployment</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/stan_deployment/doc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Stan Deployment</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" aria-expanded="true">
+ <span class="menu-text">News</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/NEWS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Releases</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" aria-expanded="true">
+ <span class="menu-text">Development</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/CODE_OF_CONDUCT.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Contributor Covenant Code of Conduct</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../book/CONTRIBUTING.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Contributing</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#model-details" id="toc-model-details" class="nav-link active" data-scroll-target="#model-details">Model details</a></li>
+  <li><a href="#intended-use" id="toc-intended-use" class="nav-link" data-scroll-target="#intended-use">Intended use</a></li>
+  <li><a href="#important-aspectsfactors" id="toc-important-aspectsfactors" class="nav-link" data-scroll-target="#important-aspectsfactors">Important aspects/factors</a></li>
+  <li><a href="#metrics" id="toc-metrics" class="nav-link" data-scroll-target="#metrics">Metrics</a></li>
+  <li><a href="#training-data-evaluation-data" id="toc-training-data-evaluation-data" class="nav-link" data-scroll-target="#training-data-evaluation-data">Training data &amp; evaluation data</a></li>
+  <li><a href="#quantitative-analyses" id="toc-quantitative-analyses" class="nav-link" data-scroll-target="#quantitative-analyses">Quantitative analyses</a>
+  <ul class="collapse">
+  <li><a href="#overall-model-performance" id="toc-overall-model-performance" class="nav-link" data-scroll-target="#overall-model-performance">Overall model performance</a></li>
+  <li><a href="#visualize-model-performance" id="toc-visualize-model-performance" class="nav-link" data-scroll-target="#visualize-model-performance">Visualize model performance</a></li>
+  </ul></li>
+  <li><a href="#ethical-considerations" id="toc-ethical-considerations" class="nav-link" data-scroll-target="#ethical-considerations">Ethical considerations</a></li>
+  <li><a href="#caveats-recommendations" id="toc-caveats-recommendations" class="nav-link" data-scroll-target="#caveats-recommendations">Caveats &amp; recommendations</a></li>
+  </ul>
+<div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/PlantandFoodResearch/r-k8s-deployment-test/issues/new" class="toc-action">Report an issue</a></p></div></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Model Card: H2O Stacking Ensemble</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 4, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code> Connection successful!
+
+R is connected to the H2O cluster: 
+    H2O cluster uptime:         1 days 17 hours 
+    H2O cluster timezone:       Etc/GMT 
+    H2O data parsing timezone:  UTC 
+    H2O cluster version:        3.44.0.3 
+    H2O cluster version age:    1 year, 4 months and 13 days 
+    H2O cluster name:           root 
+    H2O cluster total nodes:    1 
+    H2O cluster total memory:   182.25 GB 
+    H2O cluster total cores:    1 
+    H2O cluster allowed cores:  1 
+    H2O cluster healthy:        TRUE 
+    H2O Connection ip:          h2o.pfram.k8s.dev.pfr.co.nz 
+    H2O Connection port:        443 
+    H2O Connection proxy:       NA 
+    H2O Internal Security:      FALSE 
+    R Version:                  R version 4.3.3 (2024-02-29) </code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in h2o.clusterInfo(): 
+Your H2O cluster version is (1 year, 4 months and 13 days) old. There may be a newer version available.
+Please download and install the latest version from: https://h2o-release.s3.amazonaws.com/h2o/latest_stable.html</code></pre>
+</div>
+</div>
+<p>A <a href="https://doi.org/10.1145/3287560.3287596">model card</a> provides brief, transparent, responsible reporting for a trained machine learning model.</p>
+<section id="model-details" class="level2">
+<h2 class="anchored" data-anchor-id="model-details">Model details</h2>
+<ul>
+<li>Developed by PERSON AND/OR TEAM</li>
+<li>A conformalised machine learning model. using 11 features</li>
+<li>More details about how model was developed and what it is predicting</li>
+<li>More details on feature engineering and/or data preprocessing for model</li>
+<li>Version 20250503T171937Z-d130f of this model was published at 2025-05-04 05:19:37</li>
+<li>Citation and/or license details for the model</li>
+<li>If you have questions about this model, please contact <a href="mailto:PERSON@ORG.ORG" class="email">PERSON@ORG.ORG</a></li>
+</ul>
+</section>
+<section id="intended-use" class="level2">
+<h2 class="anchored" data-anchor-id="intended-use">Intended use</h2>
+<ul>
+<li>The primary intended uses of this model are …</li>
+<li>The primary intended users of this model are …</li>
+<li>Some use cases are out of scope for this model, such as …</li>
+</ul>
+</section>
+<section id="important-aspectsfactors" class="level2">
+<h2 class="anchored" data-anchor-id="important-aspectsfactors">Important aspects/factors</h2>
+<ul>
+<li>Aspects or factors (demographic, environmental, technical) that are relevant to the context of this model are …</li>
+<li>In evaluating this model, we examined aspects such as …</li>
+</ul>
+</section>
+<section id="metrics" class="level2">
+<h2 class="anchored" data-anchor-id="metrics">Metrics</h2>
+<ul>
+<li>The metrics used to evaluate this model are …</li>
+<li>These metrics are computed via …</li>
+<li>We chose these metrics because …</li>
+</ul>
+</section>
+<section id="training-data-evaluation-data" class="level2">
+<h2 class="anchored" data-anchor-id="training-data-evaluation-data">Training data &amp; evaluation data</h2>
+<ul>
+<li><p>The training dataset for this model was …</p></li>
+<li><p>The training dataset for this model has the “prototype” or signature:</p></li>
+</ul>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows: 0
+Columns: 11
+$ mpg  &lt;dbl&gt; 
+$ cyl  &lt;dbl&gt; 
+$ disp &lt;dbl&gt; 
+$ hp   &lt;dbl&gt; 
+$ drat &lt;dbl&gt; 
+$ wt   &lt;dbl&gt; 
+$ qsec &lt;dbl&gt; 
+$ vs   &lt;dbl&gt; 
+$ am   &lt;dbl&gt; 
+$ gear &lt;dbl&gt; 
+$ carb &lt;dbl&gt; </code></pre>
+</div>
+</div>
+<ul>
+<li><p>The evaluation dataset used in this model card is …</p></li>
+<li><p>We chose this evaluation data because …</p></li>
+</ul>
+</section>
+<section id="quantitative-analyses" class="level2 tabset">
+<h2 class="tabset anchored" data-anchor-id="quantitative-analyses">Quantitative analyses</h2>
+<div class="cell">
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'probably'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following objects are masked from 'package:base':
+
+    as.factor, as.ordered</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 28 × 14
+   .pred .pred_lower .pred_upper   mpg   cyl  disp    hp  drat    wt  qsec    vs
+ * &lt;dbl&gt;       &lt;dbl&gt;       &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+ 1  23.3       17.4         29.2  21.5     4 120.     97  3.7   2.46  20.0     1
+ 2  16.5       10.6         22.4  18.7     8 360     175  3.15  3.44  17.0     0
+ 3  26.8       20.9         32.7  27.3     4  79      66  4.08  1.94  18.9     1
+ 4  12.3        6.43        18.2  14.7     8 440     230  3.23  5.34  17.4     0
+ 5  15.9       10.0         21.8  15.2     8 276.    180  3.07  3.78  18       0
+ 6  20.1       14.2         26.0  19.7     6 145     175  3.62  2.77  15.5     0
+ 7  22.9       17.0         28.8  24.4     4 147.     62  3.69  3.19  20       1
+ 8  20.1       14.1         26.0  17.8     6 168.    123  3.92  3.44  18.9     1
+ 9  26.5       20.6         32.4  32.4     4  78.7    66  4.08  2.2   19.5     1
+10  27.6       21.7         33.5  30.4     4  75.7    52  4.93  1.62  18.5     1
+# ℹ 18 more rows
+# ℹ 3 more variables: am &lt;dbl&gt;, gear &lt;dbl&gt;, carb &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<section id="overall-model-performance" class="level3">
+<h3 class="anchored" data-anchor-id="overall-model-performance">Overall model performance</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 3 × 3
+  .metric .estimator .estimate
+  &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+1 rmse    standard       2.20 
+2 rsq     standard       0.857
+3 mae     standard       1.75 </code></pre>
+</div>
+</div>
+</section>
+<section id="visualize-model-performance" class="level3">
+<h3 class="anchored" data-anchor-id="visualize-model-performance">Visualize model performance</h3>
+<div class="cell">
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+ℹ Please use `linewidth` instead.</code></pre>
+</div>
+<div class="cell-output-display">
+<div class="plotly html-widget html-fill-item" id="htmlwidget-84bf2888eb9d97da14fa" style="width:100%;height:278px;"></div>
+<script type="application/json" data-for="htmlwidget-84bf2888eb9d97da14fa">{"x":{"data":[{"x":[9.3000000000000007,33.5],"y":[9.3000000000000007,33.5],"text":"intercept: 0<br />slope: 1","type":"scatter","mode":"lines","line":{"width":4.5354330708661417,"color":"rgba(0,0,139,1)","dash":"dash"},"hoveron":"points","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[21.5,18.699999999999999,27.300000000000001,14.699999999999999,15.199999999999999,19.699999999999999,24.399999999999999,17.800000000000001,32.399999999999999,30.399999999999999,21.399999999999999,14.300000000000001,18.100000000000001,10.4,21,19.199999999999999,30.399999999999999,22.800000000000001,10.4,19.199999999999999,26,15,16.399999999999999,21,22.800000000000001,13.300000000000001,15.800000000000001,15.199999999999999],"y":[23.289128013300093,16.502537250956518,26.758640148590171,12.341415205137451,15.931035555226883,20.076796307545575,22.870745825389669,20.058341107139245,26.491603334299096,27.605187810064738,24.565560410031949,14.467955164325119,19.808103993633772,12.129369954299166,21.415523479312402,20.022701545748092,26.304076893673994,22.949053663901811,12.329051549409254,15.775906381520594,25.685028045016082,14.490302918596441,15.564496225044715,21.673223478479652,25.608727973439205,14.696399251869812,18.288428848733599,17.100659665314829],"text":["mpg: 21.5<br />.pred: 23.28913","mpg: 18.7<br />.pred: 16.50254","mpg: 27.3<br />.pred: 26.75864","mpg: 14.7<br />.pred: 12.34142","mpg: 15.2<br />.pred: 15.93104","mpg: 19.7<br />.pred: 20.07680","mpg: 24.4<br />.pred: 22.87075","mpg: 17.8<br />.pred: 20.05834","mpg: 32.4<br />.pred: 26.49160","mpg: 30.4<br />.pred: 27.60519","mpg: 21.4<br />.pred: 24.56556","mpg: 14.3<br />.pred: 14.46796","mpg: 18.1<br />.pred: 19.80810","mpg: 10.4<br />.pred: 12.12937","mpg: 21.0<br />.pred: 21.41552","mpg: 19.2<br />.pred: 20.02270","mpg: 30.4<br />.pred: 26.30408","mpg: 22.8<br />.pred: 22.94905","mpg: 10.4<br />.pred: 12.32905","mpg: 19.2<br />.pred: 15.77591","mpg: 26.0<br />.pred: 25.68503","mpg: 15.0<br />.pred: 14.49030","mpg: 16.4<br />.pred: 15.56450","mpg: 21.0<br />.pred: 21.67322","mpg: 22.8<br />.pred: 25.60873","mpg: 13.3<br />.pred: 14.69640","mpg: 15.8<br />.pred: 18.28843","mpg: 15.2<br />.pred: 17.10066"],"type":"scatter","mode":"markers","marker":{"autocolorscale":false,"color":"rgba(0,0,0,1)","opacity":0.5,"size":5.6692913385826778,"symbol":"circle","line":{"width":1.8897637795275593,"color":"rgba(0,0,0,1)"}},"hoveron":"points","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[10.4,10.4,13.300000000000001,14.300000000000001,14.699999999999999,15,15.199999999999999,15.199999999999999,15.800000000000001,16.399999999999999,17.800000000000001,18.100000000000001,18.699999999999999,19.199999999999999,19.199999999999999,19.699999999999999,21,21,21.399999999999999,21.5,22.800000000000001,22.800000000000001,24.399999999999999,26,27.300000000000001,30.399999999999999,30.399999999999999,32.399999999999999,32.399999999999999,32.399999999999999,30.399999999999999,30.399999999999999,27.300000000000001,26,24.399999999999999,22.800000000000001,22.800000000000001,21.5,21.399999999999999,21,21,19.699999999999999,19.199999999999999,19.199999999999999,18.699999999999999,18.100000000000001,17.800000000000001,16.399999999999999,15.800000000000001,15.199999999999999,15.199999999999999,15,14.699999999999999,14.300000000000001,13.300000000000001,10.4,10.4,10.4],"y":[6.2209732885982643,6.4206548837083517,8.7880025861689095,8.5595584986242166,6.4330185394365493,8.5819062528955392,10.022638889525981,11.192262999613927,12.380032183032696,9.6560995593438133,14.149944441438343,13.89970732793287,10.594140585255616,14.11430488004719,9.8675097158196916,14.168399641844672,15.507126813611499,15.76482681277875,18.657163744331047,17.380731347599191,17.040656998200909,19.700331307738303,16.962349159688767,19.77663137931518,20.850243482889269,21.696791144363836,20.395680227973092,20.583206668598194,20.583206668598194,32.399999999999999,33.51358447576564,32.212473559374899,32.667036814291073,31.593424710716985,28.779142491090571,28.857450329602713,31.517124639140107,29.197524679000995,30.473957075732852,27.323920145013304,27.581620144180555,25.985192973246477,25.931098211448994,21.684303047221498,22.41093391665742,25.716500659334674,25.966737772840148,21.472892890745619,24.196825514434501,21.839432220927783,23.009056331015731,20.398699584297344,18.249811870838354,20.376351830026021,20.604795917570712,18.03776662000007,18.237448215110156,6.2209732885982643],"text":["mpg: 10.4<br />.pred: 12.12937<br />.pred_lower:  6.220973<br />.pred_upper: 18.03777","mpg: 10.4<br />.pred: 12.32905<br />.pred_lower:  6.420655<br />.pred_upper: 18.23745","mpg: 13.3<br />.pred: 14.69640<br />.pred_lower:  8.788003<br />.pred_upper: 20.60480","mpg: 14.3<br />.pred: 14.46796<br />.pred_lower:  8.559558<br />.pred_upper: 20.37635","mpg: 14.7<br />.pred: 12.34142<br />.pred_lower:  6.433019<br />.pred_upper: 18.24981","mpg: 15.0<br />.pred: 14.49030<br />.pred_lower:  8.581906<br />.pred_upper: 20.39870","mpg: 15.2<br />.pred: 15.93104<br />.pred_lower: 10.022639<br />.pred_upper: 21.83943","mpg: 15.2<br />.pred: 17.10066<br />.pred_lower: 11.192263<br />.pred_upper: 23.00906","mpg: 15.8<br />.pred: 18.28843<br />.pred_lower: 12.380032<br />.pred_upper: 24.19683","mpg: 16.4<br />.pred: 15.56450<br />.pred_lower:  9.656100<br />.pred_upper: 21.47289","mpg: 17.8<br />.pred: 20.05834<br />.pred_lower: 14.149944<br />.pred_upper: 25.96674","mpg: 18.1<br />.pred: 19.80810<br />.pred_lower: 13.899707<br />.pred_upper: 25.71650","mpg: 18.7<br />.pred: 16.50254<br />.pred_lower: 10.594141<br />.pred_upper: 22.41093","mpg: 19.2<br />.pred: 20.02270<br />.pred_lower: 14.114305<br />.pred_upper: 25.93110","mpg: 19.2<br />.pred: 15.77591<br />.pred_lower:  9.867510<br />.pred_upper: 21.68430","mpg: 19.7<br />.pred: 20.07680<br />.pred_lower: 14.168400<br />.pred_upper: 25.98519","mpg: 21.0<br />.pred: 21.41552<br />.pred_lower: 15.507127<br />.pred_upper: 27.32392","mpg: 21.0<br />.pred: 21.67322<br />.pred_lower: 15.764827<br />.pred_upper: 27.58162","mpg: 21.4<br />.pred: 24.56556<br />.pred_lower: 18.657164<br />.pred_upper: 30.47396","mpg: 21.5<br />.pred: 23.28913<br />.pred_lower: 17.380731<br />.pred_upper: 29.19752","mpg: 22.8<br />.pred: 22.94905<br />.pred_lower: 17.040657<br />.pred_upper: 28.85745","mpg: 22.8<br />.pred: 25.60873<br />.pred_lower: 19.700331<br />.pred_upper: 31.51712","mpg: 24.4<br />.pred: 22.87075<br />.pred_lower: 16.962349<br />.pred_upper: 28.77914","mpg: 26.0<br />.pred: 25.68503<br />.pred_lower: 19.776631<br />.pred_upper: 31.59342","mpg: 27.3<br />.pred: 26.75864<br />.pred_lower: 20.850243<br />.pred_upper: 32.66704","mpg: 30.4<br />.pred: 27.60519<br />.pred_lower: 21.696791<br />.pred_upper: 33.51358","mpg: 30.4<br />.pred: 26.30408<br />.pred_lower: 20.395680<br />.pred_upper: 32.21247","mpg: 32.4<br />.pred: 26.49160<br />.pred_lower: 20.583207<br />.pred_upper: 32.40000","mpg: 32.4<br />.pred: 26.49160<br />.pred_lower: 20.583207<br />.pred_upper: 32.40000","mpg: 32.4<br />.pred: 26.49160<br />.pred_lower: 20.583207<br />.pred_upper: 32.40000","mpg: 30.4<br />.pred: 27.60519<br />.pred_lower: 21.696791<br />.pred_upper: 33.51358","mpg: 30.4<br />.pred: 26.30408<br />.pred_lower: 20.395680<br />.pred_upper: 32.21247","mpg: 27.3<br />.pred: 26.75864<br />.pred_lower: 20.850243<br />.pred_upper: 32.66704","mpg: 26.0<br />.pred: 25.68503<br />.pred_lower: 19.776631<br />.pred_upper: 31.59342","mpg: 24.4<br />.pred: 22.87075<br />.pred_lower: 16.962349<br />.pred_upper: 28.77914","mpg: 22.8<br />.pred: 22.94905<br />.pred_lower: 17.040657<br />.pred_upper: 28.85745","mpg: 22.8<br />.pred: 25.60873<br />.pred_lower: 19.700331<br />.pred_upper: 31.51712","mpg: 21.5<br />.pred: 23.28913<br />.pred_lower: 17.380731<br />.pred_upper: 29.19752","mpg: 21.4<br />.pred: 24.56556<br />.pred_lower: 18.657164<br />.pred_upper: 30.47396","mpg: 21.0<br />.pred: 21.41552<br />.pred_lower: 15.507127<br />.pred_upper: 27.32392","mpg: 21.0<br />.pred: 21.67322<br />.pred_lower: 15.764827<br />.pred_upper: 27.58162","mpg: 19.7<br />.pred: 20.07680<br />.pred_lower: 14.168400<br />.pred_upper: 25.98519","mpg: 19.2<br />.pred: 20.02270<br />.pred_lower: 14.114305<br />.pred_upper: 25.93110","mpg: 19.2<br />.pred: 15.77591<br />.pred_lower:  9.867510<br />.pred_upper: 21.68430","mpg: 18.7<br />.pred: 16.50254<br />.pred_lower: 10.594141<br />.pred_upper: 22.41093","mpg: 18.1<br />.pred: 19.80810<br />.pred_lower: 13.899707<br />.pred_upper: 25.71650","mpg: 17.8<br />.pred: 20.05834<br />.pred_lower: 14.149944<br />.pred_upper: 25.96674","mpg: 16.4<br />.pred: 15.56450<br />.pred_lower:  9.656100<br />.pred_upper: 21.47289","mpg: 15.8<br />.pred: 18.28843<br />.pred_lower: 12.380032<br />.pred_upper: 24.19683","mpg: 15.2<br />.pred: 15.93104<br />.pred_lower: 10.022639<br />.pred_upper: 21.83943","mpg: 15.2<br />.pred: 17.10066<br />.pred_lower: 11.192263<br />.pred_upper: 23.00906","mpg: 15.0<br />.pred: 14.49030<br />.pred_lower:  8.581906<br />.pred_upper: 20.39870","mpg: 14.7<br />.pred: 12.34142<br />.pred_lower:  6.433019<br />.pred_upper: 18.24981","mpg: 14.3<br />.pred: 14.46796<br />.pred_lower:  8.559558<br />.pred_upper: 20.37635","mpg: 13.3<br />.pred: 14.69640<br />.pred_lower:  8.788003<br />.pred_upper: 20.60480","mpg: 10.4<br />.pred: 12.12937<br />.pred_lower:  6.220973<br />.pred_upper: 18.03777","mpg: 10.4<br />.pred: 12.32905<br />.pred_lower:  6.420655<br />.pred_upper: 18.23745","mpg: 10.4<br />.pred: 12.12937<br />.pred_lower:  6.220973<br />.pred_upper: 18.03777"],"type":"scatter","mode":"lines","line":{"width":1.8897637795275593,"color":"transparent","dash":"solid"},"fill":"toself","fillcolor":"rgba(173,216,230,0.2)","hoveron":"points","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null}],"layout":{"margin":{"t":33.047184170471837,"r":7.3059360730593621,"b":47.001522070015227,"l":37.260273972602747},"plot_bgcolor":"rgba(255,255,255,1)","paper_bgcolor":"rgba(255,255,255,1)","font":{"color":"rgba(0,0,0,1)","family":"","size":14.611872146118724},"xaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[9.3000000000000007,33.5],"tickmode":"array","ticktext":["10","15","20","25","30"],"tickvals":[10,15,20,25,30],"categoryorder":"array","categoryarray":["10","15","20","25","30"],"nticks":null,"ticks":"outside","tickcolor":"rgba(179,179,179,1)","ticklen":3.6529680365296811,"tickwidth":0.33208800332088001,"showticklabels":true,"tickfont":{"color":"rgba(77,77,77,1)","family":"","size":11.68949771689498},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(222,222,222,1)","gridwidth":0.33208800332088001,"zeroline":false,"anchor":"y","title":{"text":"mpg","font":{"color":"rgba(0,0,0,1)","family":"","size":14.611872146118724}},"hoverformat":".2f"},"yaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[4.8563427292398957,34.878215035124008],"tickmode":"array","ticktext":["10","20","30"],"tickvals":[10,20.000000000000004,30],"categoryorder":"array","categoryarray":["10","20","30"],"nticks":null,"ticks":"outside","tickcolor":"rgba(179,179,179,1)","ticklen":3.6529680365296811,"tickwidth":0.33208800332088001,"showticklabels":true,"tickfont":{"color":"rgba(77,77,77,1)","family":"","size":11.68949771689498},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(222,222,222,1)","gridwidth":0.33208800332088001,"zeroline":false,"anchor":"x","title":{"text":".pred","font":{"color":"rgba(0,0,0,1)","family":"","size":14.611872146118724}},"hoverformat":".2f"},"shapes":[{"type":"rect","fillcolor":"transparent","line":{"color":"rgba(179,179,179,1)","width":0.66417600664176002,"linetype":"solid"},"yref":"paper","xref":"paper","x0":0,"x1":1,"y0":0,"y1":1}],"showlegend":false,"legend":{"bgcolor":"rgba(255,255,255,1)","bordercolor":"transparent","borderwidth":1.8897637795275593,"font":{"color":"rgba(0,0,0,1)","family":"","size":11.68949771689498}},"hovermode":"closest","barmode":"relative"},"config":{"doubleClick":"reset","modeBarButtonsToAdd":["hoverclosest","hovercompare"],"showSendToCloud":false},"source":"A","attrs":{"1c0dc4ead7ef6":{"intercept":{},"slope":{},"type":"scatter"},"1c0dc1b5b86e3":{"x":{},"y":{}},"1c0dc4f7203c2":{"x":{},"y":{},"ymin":{},"ymax":{}}},"cur_data":"1c0dc4ead7ef6","visdat":{"1c0dc4ead7ef6":["function (y) ","x"],"1c0dc1b5b86e3":["function (y) ","x"],"1c0dc4f7203c2":["function (y) ","x"]},"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.20000000000000001,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+</section>
+</section>
+<section id="ethical-considerations" class="level2">
+<h2 class="anchored" data-anchor-id="ethical-considerations">Ethical considerations</h2>
+<ul>
+<li>We considered …</li>
+</ul>
+</section>
+<section id="caveats-recommendations" class="level2">
+<h2 class="anchored" data-anchor-id="caveats-recommendations">Caveats &amp; recommendations</h2>
+<ul>
+<li>This model does …</li>
+<li>This model does not …</li>
+<li>We recommend …</li>
+</ul>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../../book/h2o_deployment/doc.html" class="pagination-link">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">H2O Deployment</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../../book/stan_deployment/doc.html" class="pagination-link">
+        <span class="nav-page-text">Stan Deployment</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+</body></html>

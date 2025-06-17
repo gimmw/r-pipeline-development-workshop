@@ -1,0 +1,27 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
+mtcars|stem|0c38041a50e89304|226aeea00dc77a5b|2c530c1562a7fbd1|-1437131809||t20211.7097445588s|s904b|904|rds|local|vector|||0.811||
+data_split|stem|c4922cb01fe00281|b86313d243180c2b|903fbb379e0055fc|-175495908||t20211.7097503494s|s1013b|1013|rds|local|vector|||0.263||
+data_train|stem|43453165b2583ae9|8d56492c40dd346b|7ed811ae4b18e8ff|-56795375||t20211.7097532068s|s867b|867|rds|local|vector|||0||
+data_test|stem|002d481ffdd5cd6d|5498e9e29b793044|7ed811ae4b18e8ff|1912764363||t20211.709753551s|s334b|334|rds|local|vector|||0||
+training_recipe|stem|eb176de75b61baaf|71df56b57a61f17b|9d6c627c6ee203c2|1424537471||t20211.7097888073s|s20418b|20418|rds|local|vector|||3.011||
+board|stem|e56d0e7a83aab31a|aa3fac4a9cf98105|2c530c1562a7fbd1|-511852107||t20211.7187865027s|s32490b|32490|rds|local|vector|||0.568||
+connection|stem|0fef30c7f3b5c7e6|66c1159a5954684e|2c530c1562a7fbd1|1065485104||t20211.7200925986s|s103517b|103517|rds|local|vector|||0.091|Your H2O cluster version is (1 year, 4 months and 13 days) old. There may be a newer version available. Please download and install the latest version from: https://h2o-release.s3.amazonaws.com/h2o/latest_stable.html|
+auto_fit|stem|8eee03fe3d6c3eae|86a48905773aeb26|ec34a12ad4b47e73|-904771485||t20211.7203362454s|s35691b|35691|rds|local|vector|||20.969||
+conformalised_stack|stem|101c3e1d8e4dd5f4|818effbc4b8fd5eb|bfce80a165739804|109201162||t20211.7203476946s|s36737b|36737|rds|local|vector|||0.858||
+conformalise_model|function|4a8fa232c6e751d2
+h2o_deployment|object|b220027c91619990
+patch_tidymodel|function|695bd5d945f42aec
+vetiver_ptype.int_conformal_split|function|338ed59545302cc3
+vetiver_create_description.int_conformal_split|function|429e10900dea18c3
+handler_predict.int_conformal_split|function|cc23c299000880df
+vetiver_create_meta.int_conformal_split|function|6016553109212f36
+get_training_recipe|function|c54b1162f78bb14d
+tidymodels_deployment|object|c8d61f2ccab807fe
+get_split|function|90163f8fa94f8efd
+get_workflow_set|function|944f04b4fbcd0be4
+optimise_hyperparams|function|5c12ac52f2dd327e
+agua|object|588925d2fe96643f
+run_automl|function|51654e083b6497cd
+stack_model_set|function|7bbf19862e42c0e2
+v_conformalised_stack|stem|b5bd7f6b27bea9c2|1196a4036ea46e1c|ccd72862869ae126|-1504278565||t20211.7211764967s|s36882b|36882|rds|local|vector|||0.012||
+pinned_model|stem|f0cdc44fecb4817f|4173739612ea3e93|6d203f7fceee6e28|-669463598||t20211.7211855796s|s44b|44|rds|local|vector|||0.635||

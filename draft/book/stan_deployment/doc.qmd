@@ -1,0 +1,399 @@
+---
+title: "Stan Deployment"
+date: today
+author: James Bristow
+fig-pos: 'H'
+toc: true
+lof: true
+lot: true
+link-citations: true
+---
+
+# Introduction
+
+This tutorial will demonstrate how one may fit and deploy a Stan model onto Kubernetes via vetiver. We first load all required dependencies.
+
+```{r setup, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = FALSE, output=TRUE, eval=TRUE}
+
+box::use(../../R/tidymodels_deployment)
+box::use(
+  readr[read_csv, read_file],
+  here[here],
+  rsample[initial_split, training, testing],
+  parsnip[linear_reg, set_engine, set_mode],
+  recipes[recipe, update_role, step_zv, step_nzv, step_normalize, step_impute_knn, update, all_numeric, all_outcomes, add_role],
+  hardhat[tune],
+  workflows[workflow, add_recipe, add_model, fit, add_variables, remove_variables],
+  vetiver[vetiver_model, vetiver_pin_write, vetiver_api, vetiver_pin_read],
+  pins[board_temp, board_s3, pin_write, pin_read, pin_upload, pin_download],
+  readr[read_file],
+  paws.common,
+  paws.storage,
+  plotly[ggplotly],
+  plumber[pr, pr_run],
+  zeallot[...],
+  targets[tar_make],
+  dplyr[filter, arrange, mutate, select],
+  ggplot2[ggplot, geom_boxplot, labs, scale_x_sqrt, aes],
+  tidyr[unnest],
+  multilevelmod,
+  brms[brm, bf, prior, threading, save_pars],
+  loo,
+  cmdstanr[cmdstan_model],
+  rstanarm[normal],
+  marginaleffects[plot_predictions, plot_slopes],
+  bayesplot[ppc_dens_overlay, ppc_intervals, ppc_stat]
+)
+```
+
+# Data
+
+We next load the sleep study dataset, and perform data pre-processing.
+
+```{r load-stan-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+load(url('https://raw.githubusercontent.com/lme4/lme4/master/data/sleepstudy.rda')) # For targets...later
+
+data_split <- sleepstudy |>
+  initial_split(
+    prop = 0.9, strata = Subject
+  )
+
+data_train <- training(data_split)
+data_test  <- testing(data_split)
+
+training_recipe <- recipe(Reaction ~ Days + Subject, data = data_train) |>
+  update_role(Days, new_role = "predictor") |>
+  update_role(Reaction, new_role = "outcome") |>
+  add_role(Subject, new_role = "exp_unit")
+```
+
+# multilevelmod 
+
+We will fit a multi-level model using `multilevelmod`.
+
+```{r stan-multilevelmod, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+lmer_spec <- 
+  linear_reg() |>
+  set_engine(
+    "stan_glmer",
+    family = gaussian("identity"),
+    chains = 4,
+    iter = 2000,
+    seed = 100,
+    prior_intercept = normal(250, 10),
+    prior = normal(10, 1)
+  ) |>
+  set_mode("regression") 
+
+multilevel_wflow <-
+  workflow() |>
+  add_variables(outcomes = Reaction, predictors = c(Days, Subject)) |>
+  add_model(lmer_spec, formula = Reaction ~ Days + (1|Subject))  |>
+  remove_variables() |>
+  add_recipe(training_recipe)
+  
+multilevel_fit <- multilevel_wflow |> 
+  fit(data = data_train)
+multilevel_fit$training <- data_train |> select(-Reaction)
+multilevel_fit
+```
+
+## Model deployment
+
+Let's save the model to S3. Then deploy it.
+
+```{r stan-multilevelmod-s3, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+class(multilevel_fit) <- c("multilevel_fit") # This doesn't seem to work too well. MLflow for multilevelmod
+
+board <- board_s3(
+  "data", 
+  access_key = "user", 
+  secret_access_key = "password", 
+  region = "us-east-2",
+  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+)
+
+predict.multilevel_fit <- function(model, new_data) {
+  predict(model$fit$fit, new_data=new_data)$.pred # We can use poster predict here too.
+}
+
+vetiver_create_description.multilevel_fit <- function(model) {
+    "A multi-level model."
+}
+
+vetiver_create_meta.multilevel_fit <- function(model, metadata) {
+    vetiver::vetiver_meta(metadata, required_pkgs = "multilevelmod")
+}
+
+vetiver_ptype.multilevel_fit <- function(model, ...) {
+    vctrs::vec_ptype(model$training)
+}
+
+handler_predict.multilevel_fit <- function(vetiver_model, ...) {
+    
+    ptype <- vetiver_model$prototype
+    
+    function(req) {
+        newdata <- req$body
+        print(newdata)
+        newdata <- vetiver::vetiver_type_convert(newdata, ptype)
+        print(newdata)
+        newdata <- hardhat::scream(newdata, ptype)
+        ret <- predict(vetiver_model$model, new_data = newdata, ...)
+        list(.pred = ret)
+    }
+    
+}
+
+v_multilevel_fit <- vetiver_model(multilevel_fit, "multilevel_fit")
+board |> 
+  vetiver_pin_write(v_multilevel_fit)
+
+v_model <- board |> vetiver_pin_read("multilevel_fit")
+
+pr() |>
+  vetiver_api(v_model) |>
+  pr_run(port = 8088)
+```
+
+# brms
+
+We will fit a nonlinear multi-level model using `brms`.
+
+```{r load-brms-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+data(loss, package = "brms")
+head(loss)
+```
+
+```{r fit-brms-model, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+invisible(capture.output(
+  fit_loss <- brm(
+    bf(
+      cum ~ ult * (1 - exp(-(dev/theta)^omega)),
+      ult ~ 1 + (1|AY), 
+      omega ~ 1, 
+      theta ~ 1,
+      nl = TRUE
+    ),
+    data = loss, 
+    family = gaussian("identity"),
+    prior = c(
+      prior(normal(5000, 1000), nlpar = "ult"),
+      prior(normal(1, 2), nlpar = "omega"),
+      prior(normal(45, 10), nlpar = "theta")
+    ),
+    control = list(adapt_delta = 0.9),
+    thin = 1,
+    seed = 100,
+    algorithm = "sampling",
+    iter = 2000,
+    warmup = 1000,
+    sample_prior = FALSE,
+    silent = 2,
+    refresh = 0,
+    chains = 4,
+    backend = "cmdstanr",
+    threads = threading(4),
+    save_pars = save_pars(all = TRUE)
+  )
+))
+fit_loss
+```
+
+
+## Model deployment
+
+Let's save the model to S3. Then deploy it.
+
+```{r stan-brms-s3, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+fit_loss$training <- loss |> select(-cum)
+fit_loss$response <- loss |> select(cum)
+
+board <- board_s3(
+  "data", 
+  access_key = "user", 
+  secret_access_key = "password", 
+  region = "us-east-2",
+  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+)
+
+vetiver_create_description.brmsfit <- function(model) {
+    "A brms Bayesian model."
+}
+
+vetiver_create_meta.brmsfit <- function(model, metadata) {
+    vetiver::vetiver_meta(metadata, required_pkgs = "brms")
+}
+
+vetiver_ptype.brmsfit <- function(model, ...) {
+    vctrs::vec_ptype(model$training)
+}
+
+handler_predict.brmsfit <- function(vetiver_model, ...) {
+    ptype <- vetiver_model$prototype
+    
+    function(req) {
+        newdata <- req$body
+        newdata <- vetiver::vetiver_type_convert(newdata, ptype)
+        newdata <- hardhat::scream(newdata, ptype)
+        ret <- predict(vetiver_model$model, new_data = newdata, ...)
+        list(
+          .pred = ret[,"Estimate"],
+          "Q2.5" = ret[, "Q2.5"],
+          "Q97.5" = ret[, "Q97.5"]
+        )
+    }
+    
+}
+
+v_fit_loss <- vetiver_model(fit_loss, "multilevel_brms_fit")
+board |> 
+  vetiver_pin_write(v_fit_loss)
+
+v_model <- board |> vetiver_pin_read("multilevel_brms_fit")
+
+pr() |>
+  vetiver_api(v_model) |>
+  pr_run(port = 8088)
+
+#
+```
+
+# cmdstanr
+
+We will fit a nonlinear multi-level model using `cmdstanr`.
+
+```{r load-cmdstanr-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+data(loss, package = "brms")
+loss <- loss |>
+  mutate(AY = AY - min(AY) + 1)
+head(loss)
+```
+
+```{r fit-cmdstanr-model, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+loss_model <- cmdstan_model(here("stan", "loss.stan"), quiet = FALSE)
+
+data_list <- list(
+  AY = loss$AY,
+  dev = loss$dev,
+  cum = loss$cum,
+  premium = loss$premium,
+  N = nrow(loss),
+  AY_J = max(loss$AY)
+)
+
+invisible(capture.output(
+    fit_stan <- loss_model$sample(
+    data = data_list,
+    seed = 100,
+    chains = 4,
+    parallel_chains = 4,
+    refresh = 0,
+    save_latent_dynamics = FALSE,
+    adapt_delta = 0.9,
+    thin = 1,
+    iter_warmup = 1000,
+    iter_sampling = 1000,
+    diagnostics = c("divergences", "treedepth", "ebfmi"),
+    show_messages = FALSE,
+    show_exceptions = FALSE
+  )
+))
+
+fit_stan$summary()
+```
+
+## Model deployment
+
+Let's save the model to S3. Then deploy it.
+
+```{r stan-cmdstanr-s3, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+# Raw Stan code will be quite difficult to accommodate as there is a lack of input and output standardisation, irrespective of the use of MLflow or vetiver. Though I think only Chris and myself work with raw Stan.
+
+cmdstanr_container <- list(
+  model = loss_model,
+  training = loss,
+  fit = fit_stan,
+  data = data_list
+)
+
+class(cmdstanr_container) <- c("cmdstanr_container") 
+
+board <- board_s3(
+  "data", 
+  access_key = "user", 
+  secret_access_key = "password", 
+  region = "us-east-2",
+  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+)
+
+predict.cmdstanr_container <- function(model, new_data) {
+  data <- list()
+  variable_names <- model$model$variables()$data |> 
+    names()
+  
+  for(variable_name in variable_names) {
+    if(variable_name == "N") {
+      data["N"] <- nrow(new_data)
+    } else {
+      data[[variable_name]] <- new_data[[variable_name]]
+      indx_var <- paste0(variable_name, "_J")
+      if(indx_var %in% variable_names) {
+        data[[indx_var]] <- model$data[[indx_var]]
+      }
+    }
+  }
+  
+  model$model$generate_quantities(
+    model$fit, data = data
+  )$summary() |> dplyr::select(-variable)
+}
+
+vetiver_create_description.cmdstanr_container <- function(model) {
+    "A cmdstanr Bayesian model."
+}
+
+vetiver_create_meta.cmdstanr_container <- function(model, metadata) {
+    vetiver::vetiver_meta(metadata, required_pkgs = "cmdstanr")
+}
+
+vetiver_ptype.cmdstanr_container <- function(model, ...) {
+    vctrs::vec_ptype(model$training)
+}
+
+handler_predict.cmdstanr_container <- function(vetiver_model, ...) {
+    ptype <- vetiver_model$prototype
+    
+    function(req) {
+        newdata <- req$body
+        newdata <- vetiver::vetiver_type_convert(newdata, ptype)
+        newdata <- hardhat::scream(newdata, ptype)
+        ret <- predict(vetiver_model$model, new_data = newdata, ...)
+        list(
+          .pred = ret[,"mean"],
+          "sd" = ret[, "sd"],
+          "q5" = ret[, "q5"],
+          "q95" = ret[, "q95"]
+        )
+    }
+    
+}
+
+v_cmdstanr_container <- vetiver_model(cmdstanr_container, "multilevel_cmdstanr_fit")
+board |> 
+  vetiver_pin_write(v_cmdstanr_container)
+
+v_model <- board |> vetiver_pin_read("multilevel_cmdstanr_fit")
+
+pr() |>
+  vetiver_api(v_model) |>
+  pr_run(port = 8088)
+
+```

@@ -1,0 +1,418 @@
+---
+title: "Tidymodels Deployment"
+date: today
+author: James Bristow
+fig-pos: 'H'
+toc: true
+lof: true
+lot: true
+link-citations: true
+---
+
+# Introduction
+
+This tutorial will demonstrate how one may fit and deploy a TidyModels machine learning model onto Kubernetes via vetiver. We first load all required dependencies.
+
+```{r setup, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = FALSE, output=TRUE, eval=TRUE}
+box::use(../../R/tidymodels_deployment)
+box::use(
+  dials[svm_margin, trees, penalty, mixture],
+  readr[read_csv, read_file],
+  tune[control_bayes, extract_parameter_set_dials],
+  here[here],
+  ranger[ranger],
+  kernlab,
+  rsample[initial_split, vfold_cv, training, testing],
+  parsnip[rand_forest, svm_linear, boost_tree, set_engine, set_mode, linear_reg],
+  recipes[recipe, update_role, step_zv, step_nzv, step_normalize, step_impute_knn, update],
+  yardstick[rmse, mae, metric_set],
+  hardhat[tune],
+  workflows[workflow, add_recipe, add_model],
+  workflowsets[workflow_set, option_add, option_add_parameters, workflow_map],
+  stacks[stacks, add_candidates, blend_predictions, fit_members],
+  vetiver[vetiver_model, vetiver_pin_write, vetiver_api, vetiver_pin_read],
+  pins[board_temp, board_s3, pin_write, pin_read, pin_upload, pin_download],
+  readr[read_file],
+  paws.common,
+  paws.storage,
+  plotly[ggplotly],
+  probably[int_conformal_split, cal_plot_regression],
+  plumber[pr, pr_run],
+  DALEX[feature_importance, model_profile, predict_profile],
+  DALEXtra[explain_tidymodels],
+  glmnet,
+  zeallot[...],
+  targets[tar_make]
+)
+```
+
+# Data
+
+We next load the mtcars dataset, and perform data pre-processing.
+
+```{r load-tidymodels-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+data("mtcars")
+
+data_split <- mtcars |>
+  initial_split(
+    prop = 0.9
+  )
+
+data_train <- training(data_split)
+data_test  <- testing(data_split)
+
+training_recipe <- recipe(data_train) |>
+  update_role(everything(), new_role = "predictor") |>
+  update_role(mpg, new_role = "outcome") |>
+  step_zv() |>
+  step_nzv() |>
+  step_normalize(all_numeric(), -all_outcomes()) |>
+  step_impute_knn()
+```
+
+# Cross Validation
+
+We perform 5-fold cross validation.
+
+```{r tidymodels-cv, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+metric <- metric_set(rmse, mae)
+folds <- vfold_cv(
+  data_train, v = 5
+)
+
+ctrl_bayes <- control_bayes(
+  save_pred = TRUE, 
+  save_workflow = TRUE,
+  extract = identity,
+  parallel_over = "resamples",
+  allow_par = TRUE,
+  no_improve = 5
+)
+
+```
+
+# Workflow Set
+
+We next construct a workflow set composed of Cubist rules, random forest, and a linear support vector machine.
+
+```{r tidymodels-workflowset, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+lr_recipe <- linear_reg(mixture = tune(), penalty = tune()) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+rf_recipe <- rand_forest(trees = tune()) |>
+  set_engine("ranger") |>
+  set_mode("regression")
+
+svm_recipe <- svm_linear(margin = tune()) |>
+  set_engine("kernlab") |>
+  set_mode("regression")
+
+model_set <- workflow_set(
+  preproc = list(
+    standard = training_recipe
+  ),
+  models = list(
+    lr = lr_recipe,
+    rf = rf_recipe,
+    svm = svm_recipe
+  ),
+  cross = TRUE
+) |>
+  option_add(
+    metrics = metric,
+    control = ctrl_bayes,
+    resamples = folds,
+    iter = 5,
+    initial = 5
+  )
+
+```
+
+# Hyper-parameter optimisation
+
+We perform hyper-parameter optimisation using Bayesian optimisation via a Gaussian process surrogate.
+
+```{r tidymodels-hyperopt, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+lr_params <- extract_parameter_set_dials(lr_recipe) |>
+  update(
+    mixture = mixture(c(0, 1)), penalty = penalty(c(0, 5))
+  )
+
+rf_params <- extract_parameter_set_dials(rf_recipe) |>
+  update(
+    trees = trees(c(1, 250))
+  )
+
+svm_params <- extract_parameter_set_dials(svm_recipe) |>
+  update(
+    margin = svm_margin(c(0, 0.25))
+  )
+
+model_set <- model_set |>
+  option_add_parameters() |>
+  option_add(
+    param_info = lr_params,
+    id = "standard_lr"
+  ) |>
+  option_add(
+    param_info = rf_params,
+    id = "standard_rf"
+  ) |>
+  option_add(
+    param_info = svm_params,
+    id = "standard_svm"
+  ) 
+
+tuned_model_set <- model_set |>
+  workflow_map(
+    "tune_bayes", 
+    seed = 1000
+  )
+```
+
+# Stacking ensemble
+
+We ensemble the above models using stacking. A LASSO metamodel determines the optimal weights for the ensemble members.
+
+```{r tidymodels-stacking, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+stack_reg <- stacks() |>
+  add_candidates(tuned_model_set) 
+
+invisible(capture.output(
+  stack_reg <- stack_reg |>
+  blend_predictions(
+    penalty =  10^(-10:-1),
+    mixture = 0,
+    times = 10
+  ) |>
+  fit_members()
+))
+
+stack_reg
+```
+
+# Hacking
+
+Unfortunately, we have to do a bit of hacking in order to ensure that our stacking ensemble is compatible with a few R libraries (vetiver and probably). Note that this isn't needed with MLflow
+
+```{r tidymodels-hacking, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+dummy_reg_spec <-
+  linear_reg() |>
+  set_engine("lm")
+
+dummy_reg_wflow <- 
+  workflow() |>
+  add_model(dummy_reg_spec) |>
+  add_recipe(training_recipe)
+
+set.seed(1000)
+dummy_reg <- 
+  fit(
+    dummy_reg_wflow,
+    data = data_train
+  )
+
+
+class(stack_reg) <- c(class(stack_reg), "workflow")
+
+stack_reg$trained <- dummy_reg$trained
+stack_reg$pre <- dummy_reg$pre
+```
+
+# Conformalisation
+
+We next conformalise the stacking ensemble to produce non-parametric prediction intervals.
+
+```{r tidymodels-conformalisation, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+conformalised_stack <- int_conformal_split(stack_reg, data_train)
+conformalised_stack$training <- data_train
+predict(conformalised_stack, new_data = data_test)
+```
+
+```{r fig-conformal-ensemble-work-calibration, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+#| fig-cap: Calibration plot of observed and predicted discrepancies on testing data.
+
+p <- conformalised_stack |>
+  predict(new_data = data_test, level = 0.95) |>
+  mutate(
+    mpg = data_test$mpg
+  ) |>
+  cal_plot_regression(truth = mpg, estimate = .pred) 
+
+ggplotly(p)
+```
+
+# Interpretation
+
+Next, we will incorporate model agnostic interpretability using [DALEX](https://uc-r.github.io/dalex) for both local and global explanations. We need to wrap our conformalised stacking ensemble with an *Explainer* object like so:
+
+```{r conformal-explain , include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+conformal_explainer <- 
+  explain_tidymodels(
+    model = conformalised_stack,
+    data = data_train |> select(-mpg), 
+    y = data_train |>  pull(mpg),
+    label = "conformal"
+  )
+```
+
+Now, we can begin to interpret our blackbox ensemble model.
+
+## Global Explanations
+
+We will rank the features by permutation-based feature importance.
+
+```{r fig-conformal-global-explain, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+#| fig-cap: Permutation-based feature importances for the conformalised ensemble.
+
+conformal_explainer <- 
+  explain_tidymodels(
+    model = conformalised_stack,
+    data = data_train |> select(-mpg), 
+    y = data_train |>  pull(mpg),
+    label = "conformal"
+  )
+
+p <- feature_importance(
+  conformal_explainer,
+  type = "variable_importance",
+  n_sample = 1000
+) |>
+  plot()
+
+ggplotly(p)
+```
+
+## Partial Dependence
+
+We will next present a partial dependence plot.
+
+```{r fig-conformal-pdp, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+#| fig-cap: Partial dependence plots for the conformalised ensemble.
+
+p <- model_profile(
+  conformal_explainer,
+  type = "partial"
+) |>
+  plot() 
+
+ggplotly(p)
+```
+
+## Local Explanations.
+
+We will explain the predictions at the local level using Ceteris Paribus Profiles.
+
+```{r fig-conformal-local, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+#| fig-cap: Ceteris Paribus Profiles for the conformalised ensemble.
+
+p <- predict_profile(conformal_explainer, new_observation = data_test) |> 
+  plot() 
+
+ggplotly(p)
+```
+
+This is saying something similar to the Partial Dependence profile, just at the observation level.
+
+# Model deployment
+
+Let's save the model to S3.
+
+```{r tidymodels-s3, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+board <- board_s3(
+  "data", 
+  access_key = "user", 
+  secret_access_key = "password", 
+  region = "us-east-2",
+  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+)
+
+v_stack <- vetiver_model(stack_reg, "stacks_ensemble")
+board |> 
+  vetiver_pin_write(v_stack)
+```
+
+Then deploy the model as a microservice.
+
+```{r tidymodels-deploy, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE, output=TRUE}
+
+loaded_v <- board |> 
+  vetiver_pin_read("stacks_ensemble")
+
+pr(here("book", "tidymodels_deployment/app/plumber.R")) |>
+  vetiver_api(loaded_v) |>
+  pr_run(port = 8088)
+```
+
+We can repeat this process using the conformalised stacking ensemble. We need to define some custom functions, however.
+
+```{r tidymodels-conformalisation-deploy, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+vetiver_create_description.int_conformal_split <- function(model) {
+    "A conformalised machine learning model."
+}
+
+vetiver_ptype.int_conformal_split <- function(model, ...) {
+    vctrs::vec_ptype(model$training)
+}
+
+handler_predict.int_conformal_split <- function(vetiver_model, ...) {
+    
+    ptype <- vetiver_model$prototype
+    
+    function(req) {
+        newdata <- req$body
+        newdata <- vetiver::vetiver_type_convert(newdata, ptype)
+        newdata <- hardhat::scream(newdata, ptype)
+        ret <- predict(vetiver_model$model, new_data = newdata, ...)
+        list(.pred = ret)
+    }
+    
+}
+
+vetiver_create_meta.int_conformal_split <- function(model, metadata) {
+    vetiver::vetiver_meta(metadata, required_pkgs = "probably")
+}
+
+v_conformalised_stack <- vetiver_model(conformalised_stack, "conformalised_stack")
+board |> 
+  vetiver_pin_write(v_conformalised_stack)
+
+pr(here("book", "tidymodels_deployment/app/plumber.R")) |>
+  vetiver_api(v_conformalised_stack) |>
+  pr_run(port = 8088)
+```
+
+# Model card
+
+We will save a model card HTML file to S3.
+
+```{r tidymodels-card-s3, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+board |> 
+  pin_upload(
+    here(
+      "book", "tidymodels_deployment", "card.html"
+    ), 
+    "stacks_ensemble_card"
+  )
+```
+
+# Run with targets
+
+We can run the above as a targets pipeline.
+
+```{r tidymodels-targets, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=FALSE}
+
+tar_make(
+  script = here("pipelines", "_targets_tidymodels_deployment.R")
+)
+```
