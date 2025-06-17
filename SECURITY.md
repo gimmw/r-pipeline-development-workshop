@@ -1,6 +1,6 @@
 # Security Policy
 
-If you discover a security vulnerability in this project, we encourage you to let us know right away. [Please report security issues to us by creating a new security advisory.](https://github.com/PlantandFoodResearch/r-pipeline-development-workshop/security/advisories/new)
+If you discover a security vulnerability in this project, we encourage you to let us know right away. [Please report security issues to us by creating a new security advisory.](https://github.com/Plant-Food-Research-Open/r-pipeline-development-workshop/security/advisories/new)
 
 The following information will help us triage your report more quickly:
 

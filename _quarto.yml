@@ -6,7 +6,7 @@ project:
 
 website:
   title: "R Pipeline Development Workshop"
-  repo-url: https://github.com/PlantandFoodResearch/r-pipeline-development-workshop
+  repo-url: https://github.com/Plant-Food-Research-Open/r-pipeline-development-workshop
   repo-actions: [issue]
   page-navigation: true
   description: Content for the R Pipeline Development Workshop.
