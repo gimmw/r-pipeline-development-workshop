@@ -18,7 +18,7 @@ tar_source(here("R"))
 list(
   tar_target(
     connection, h2o.connect(
-      ip = "h2o.pfram.k8s.dev.pfr.co.nz", port = 443, https = TRUE
+      ip = "h2o.k8s.dev.co.nz", port = 443, https = TRUE
     )
   ),
   tar_target(
@@ -49,7 +49,7 @@ list(
       access_key = "user", 
       secret_access_key = "password", 
       region = "us-east-2",
-      endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+      endpoint = "https://minio-api.k8s.dev.co.nz"
     )
   ),
   tar_target(

@@ -19,7 +19,7 @@ board <- board_s3(
   access_key = "user", 
   secret_access_key = "password", 
   region = "us-east-2", 
-  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+  endpoint = "https://minio-api.k8s.dev.co.nz"
 )
 
 v <- vetiver_pin_read(board, params$name, version = params$version)

@@ -113,7 +113,7 @@ board <- board_s3(
   access_key = "user", 
   secret_access_key = "password", 
   region = "us-east-2",
-  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+  endpoint = "https://minio-api.k8s.dev.co.nz"
 )
 
 predict.multilevel_fit <- function(model, new_data) {
@@ -219,7 +219,7 @@ board <- board_s3(
   access_key = "user", 
   secret_access_key = "password", 
   region = "us-east-2",
-  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+  endpoint = "https://minio-api.k8s.dev.co.nz"
 )
 
 vetiver_create_description.brmsfit <- function(model) {
@@ -331,7 +331,7 @@ board <- board_s3(
   access_key = "user", 
   secret_access_key = "password", 
   region = "us-east-2",
-  endpoint = "https://minio-api.pfram.k8s.dev.pfr.co.nz"
+  endpoint = "https://minio-api.k8s.dev.co.nz"
 )
 
 predict.cmdstanr_container <- function(model, new_data) {
