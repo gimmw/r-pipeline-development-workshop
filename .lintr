@@ -1,0 +1,10 @@
+linters: all_linters(
+    cyclocomp_linter = cyclocomp_linter(40),
+    line_length_linter(120L),
+    object_length_linter(70L),
+    todo_comment_linter = NULL,
+    strings_as_factors_linter = NULL 
+  )
+exclusions: list(
+    "stan"
+)

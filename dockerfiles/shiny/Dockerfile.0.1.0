@@ -1,0 +1,84 @@
+FROM rocker/r-ver:4.4.1 AS base
+
+ARG BUILD_DATE
+
+ARG APP_VERSION
+
+LABEL maintainer=james.bristow@plantandfood.co.nz
+
+LABEL org.label-schema.build-date=$BUILD_DATE
+
+LABEL version=$APP_VERSION
+
+WORKDIR /app
+
+COPY README.md README.md
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    RENV_PATHS_ROOT=/app/renv \
+    RENV_PATHS_LIBRARY=/app/renv/library \
+    RENV_PATHS_CACHE=/app/renv/.cache \
+    RENV_CONFIG_REPOS_OVERRIDE=https://cloud.r-project.org \
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/bin/java
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jdk pandoc libsodium-dev graphviz \
+    libglpk-dev cmake libnng-dev libmbedtls-dev openssh-client liblzma-dev libpq-dev libcurl4-openssl-dev \
+    libbz2-dev software-properties-common build-essential libmagic-dev libmagick++-dev curl g++ make \
+    libharfbuzz-dev libfribidi-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/downloaded_packages \
+    && install2.r -e -n -1 --skipinstalled remotes \
+    && R -e 'remotes::install_version("renv","1.0.7", repos = "https://cran.rstudio.com/")' \
+    && R -e 'remotes::install_version("pak","0.7.2", repos = "https://cran.rstudio.com/")' \
+    && R CMD javareconf -e \
+    && adduser shiny
+
+FROM base AS r_builder
+
+COPY renv.lock .renvignore .Rprofile ./
+
+COPY renv /app/renv
+
+RUN mkdir -p $RENV_PATHS_LIBRARY \
+    && mkdir -p $RENV_PATHS_CACHE \
+    &&  R -e \
+    "options(renv.config.pak.enabled=TRUE, renv.consent=TRUE); renv::restore()" 
+
+FROM base AS python_builder
+
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=1 \
+    POETRY_VIRTUALENVS_CREATE=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    PATH="/root/.local/bin:$PATH"
+
+COPY pyproject.toml poetry.lock ./
+
+RUN curl -sSL https://install.python-poetry.org | python3 -\
+    && poetry install --no-root \
+    && rm -rf $POETRY_CACHE_DIR \
+    && curl -sSL https://install.python-poetry.org | python3 - --uninstall
+
+FROM base AS runtime
+
+ENV R_LIBS=/app/renv/library/R-4.4/x86_64-pc-linux-gnu \
+    VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
+
+COPY --chown=shiny:shiny ./app .
+
+COPY --from=r_builder --chown=shiny:shiny /app .
+
+COPY --from=python_builder --chown=shiny:shiny ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+
+RUN chown -R shiny:shiny /app \
+    && chmod -R 755 /app \
+    && R -e "cmdstanr::install_cmdstan()"
+
+EXPOSE 3838
+
+EXPOSE 8088
+
+CMD ["R", "-e", "shiny::runApp('/app', launch.browser = FALSE, host = '0.0.0.0', port = 3838)"]

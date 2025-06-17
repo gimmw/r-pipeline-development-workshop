@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+authors:
+  - family-names: "Bristow"
+    given-names: "James"
+    orcid: "https://orcid.org/0009-0002-3381-7466"
+  - family-names: "Liang"
+    given-names: "Hana"
+    orcid: "https://orcid.org/0009-0008-3342-5028"
+  - family-names: "Zhang"
+    given-names: "Jingjing"
+    orcid: "https://orcid.org/0000-0001-8809-3405"
+  - family-names: "Guo"
+    given-names: "Lindy"
+    orcid: "https://orcid.org/0000-0002-8666-2173"
+  - family-names: "Moore"
+    given-names: "Tom"
+    orcid: "https://orcid.org/0000-0002-8373-627X"
+title: "R Pipeline Development Workshop"
+version: 0.1.0
+date-released: 2025-06-17
+license: Apache-2.0
+url: "https://github.com/PlantandFoodResearch/r-pipeline-development-workshop"

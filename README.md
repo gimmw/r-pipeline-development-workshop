@@ -1,3 +1,3 @@
-# R Model Pipelines Workshop
+# R Pipeline Development Workshop
 
 Workshop on pipeline development and model deployment onto Kubernetes via Docker using R.
