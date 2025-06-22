@@ -31,7 +31,7 @@ Website: [R Pipeline Development Workshop](https://plant-food-research-open.gith
 * Hana Liang (Yongqi.Liang@plantandfood.co.nz)
 * James Bristow (James.Bristow@plantandfood.co.nz)
 
-# Stan
+# Stan and Causal Inference
 
 ## Coordinators
 
