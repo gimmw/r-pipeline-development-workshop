@@ -38,7 +38,3 @@ jobs:
         run: |
           docker compose build mlflow
           docker compose push mlflow
-      - name: Docker push shiny
-        run: |
-          docker compose build shiny
-          docker compose push shiny
