@@ -1,0 +1,10 @@
+---
+title: "Stan Workflow"
+date: today
+authors: "James Bristow, Tom Moore"
+fig-pos: 'H'
+toc: true
+lof: true
+lot: true
+link-citations: true
+---

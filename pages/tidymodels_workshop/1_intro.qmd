@@ -1,0 +1,32 @@
+---
+title: "Tidymodels Workshop"
+date: today
+authors: "James Bristow, Jingjing Zhang, Hana Liang, Lindy Guo"
+fig-pos: 'H'
+toc: true
+lof: true
+lot: true
+link-citations: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Tidymodels
+
+### Introduction
+
+Overview of pipeline development and model deployment using the tidymodels framework in R. Includes a light introduction to MLOps principles for model deployment using the vetiver and plumber R packages. Demonstrates containerisation of models using Docker for deployment onto Kubernetes.
+
+This workshop will demonstrate how one may train and deploy a TidyModels machine learning model onto Kubernetes via vetiver.
+
+### Helpful background knowledge
+
+Some familiarity with R. Statistical/machine learning concepts such as cross-validation and hyper-parameter tuning.
+
+### Coordinators
+
+- Jingjing Zhang (Jingjing.Zhang@plantandfood.co.nz)
+- Lindy Guo (Lindy.Guo@plantandfood.co.nz)
+- Hana Liang (Yongqi.Liang@plantandfood.co.nz)
+- James Bristow (James.Bristow@plantandfood.co.nz)

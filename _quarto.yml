@@ -3,7 +3,12 @@ project:
   output-dir: _site
   preview:
     browser: true
-
+  render:
+    - "*.qmd"  
+    - "*.md"  
+    - "!draft/" 
+    - "!*.rmd" 
+    
 website:
   title: "R Pipeline Development Workshop"
   repo-url: https://github.com/Plant-Food-Research-Open/r-pipeline-development-workshop
@@ -23,10 +28,19 @@ website:
       - section: "Introduction"
         contents:
         - pages/index.qmd
-      - section: "Announcements"
+      - section: "Tidymodels"
+        contents:
+        - pages/tidymodels_workshop/1_intro.qmd
+        - pages/tidymodels_workshop/2_ml_workflow.qmd
+      - section: "Stan"
+        contents:
+        - pages/stan_workshop/doc.qmd
+      - section: "Communications and Community"
         contents:
         - pages/announcements/index.md
-
+        - CODE_OF_CONDUCT.md
+        - CONTRIBUTING.md
+        
   comments:
     hypothesis:
       theme: clean

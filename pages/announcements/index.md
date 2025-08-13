@@ -1,7 +1,7 @@
 # Announcements
 
-## R Pipeline Development Workshop [2025/08/25]
+## R Pipeline Development Workshop [2025/09/03]
 
 ### Information
 
-* Provisional week for carpentries workshop.
+* Week for carpentries workshop.

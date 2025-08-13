@@ -1,0 +1,203 @@
+---
+title: "Machine Learning Workflow"
+date: today
+authors: "James Bristow, Jingjing Zhang, Hana Liang, Lindy Guo"
+fig-pos: 'H'
+toc: true
+lof: true
+lot: true
+link-citations: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# Introduction
+
+This section will demonstrate how one may train a machine learning model and tune its hyper-parameters. We first load all
+required dependencies.
+
+```{r setup, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = FALSE, output=TRUE, eval=TRUE}
+box::use(
+  dials[svm_margin, trees, penalty, mixture],
+  readr[read_csv, read_file],
+  tune[control_grid, extract_parameter_set_dials],
+  here[here],
+  ranger[ranger],
+  kernlab,
+  rsample[initial_split, vfold_cv, training, testing],
+  parsnip[rand_forest, svm_linear, boost_tree, set_engine, set_mode, linear_reg],
+  recipes[recipe, update_role, step_zv, step_nzv, step_normalize, step_impute_knn, update],
+  yardstick[rmse, mae, metric_set],
+  hardhat[tune],
+  workflows[workflow, add_recipe, add_model],
+  workflowsets[workflow_set, option_add, option_add_parameters, workflow_map],
+  stacks[stacks, add_candidates, blend_predictions, fit_members],
+  vetiver[vetiver_model, vetiver_pin_write, vetiver_api, vetiver_pin_read],
+  pins[board_temp, board_s3, pin_write, pin_read, pin_upload, pin_download],
+  readr[read_file],
+  paws.common,
+  paws.storage,
+  plotly[ggplotly],
+  probably[int_conformal_split, cal_plot_regression],
+  plumber[pr, pr_run],
+  DALEX[feature_importance, model_profile, predict_profile],
+  DALEXtra[explain_tidymodels],
+  glmnet,
+  zeallot[...],
+  targets[tar_make]
+)
+```
+
+# Data
+
+We will next load an example dataset. For this tutorial, we will use the mtcars dataset.
+
+```{r load-tidymodels-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+data("mtcars")
+head(mtcars)
+```
+
+We will next perform a 90-10 train-test data split.
+
+```{r split-tidymodels-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+data_split <- mtcars |>
+  initial_split(
+    prop = 0.9
+  )
+
+data_train <- training(data_split)
+data_test  <- testing(data_split)
+
+head(data_train)
+```
+
+Finally, we will create a data preprocessing recipe using the [recipes package](https://recipes.tidymodels.org/). This recipe will:
+
+- Drop zero and near zero-variance columns.
+- Normalise all numeric columns using Z-standardisation.
+- Impute missing data using k nearest neighbor imputation.
+
+```{r process-tidymodels-data, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+training_recipe <- recipe(data_train) |>
+  update_role(everything(), new_role = "predictor") |>
+  update_role(mpg, new_role = "outcome") |>
+  step_zv() |>
+  step_nzv() |>
+  step_normalize(all_numeric(), -all_outcomes()) |>
+  step_impute_knn()
+```
+
+# Cross Validation
+
+We will next set up 5-fold cross validation, whereby the training dataset will be divided into 5 segments to tune the hyper-parameters of the machine learning models. 
+
+```{r tidymodels-cv, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+folds <- vfold_cv(
+  data_train, v = 5
+)
+``` 
+
+For hyper-parameter optimisation, we will combine 5-fold cross validation with a grid search over different hyper-parameter combinations. We will aim to optimise the predictive accuracy of the machine learning models using the root mean square (rmse) and mean absolute error (mae) metrics. 
+
+```{r tidymodels-grid-search, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+metric <- metric_set(rmse, mae)
+
+ctrl_grid <- control_grid(
+  save_pred = TRUE,
+  save_workflow = TRUE,
+  extract = identity,
+  parallel_over = "resamples",
+  allow_par = TRUE
+)
+``` 
+
+# Workflow Set
+
+We will next use the [workflowsets package](https://workflowsets.tidymodels.org/) to easily combine and compare machine learning workflows for multiple models. We next construct a workflow set composed of linear regression, random forest, and linear support vector machine models.
+
+```{r tidymodels-ml-recipes, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+lr_recipe <- linear_reg(mixture = tune(), penalty = tune()) |> 
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+rf_recipe <- rand_forest(trees = tune()) |> 
+  set_engine("ranger") |> 
+  set_mode("regression") 
+
+svm_recipe <- svm_linear(margin = tune()) |> 
+  set_engine("kernlab") |> 
+  set_mode("regression") 
+```
+
+We will next combine these 3 models together into a single workflowset.
+
+```{r tidymodels-workflowset, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+model_set <- workflow_set(
+  preproc = list(
+    standard = training_recipe
+  ),
+  models = list(
+    lr = lr_recipe,
+    rf = rf_recipe,
+    svm = svm_recipe
+  ),
+  cross = TRUE
+) |>
+  option_add(
+    metrics = metric,
+    control = ctrl_grid,
+    resamples = folds
+  )
+```
+
+
+# Hyper-parameter optimisation
+
+We will define the grid of hyper-parameter values for performing grid search. The specification for each of our models is as follows:
+
+* Linear Regression: Mixure defines the weighting of L1 and L2 regularisation; a value of mixture = 1 corresponds to a pure lasso model, while mixture = 0 indicates ridge regression. Penalty refers to the strength of the regularisation.
+* Random Forest: Trees determines the number of ensemble members.
+* Support Vector Machine: 
+
+```{r tidymodels-hyperopt-grid, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+lr_params <- extract_parameter_set_dials(lr_recipe) |>
+  update(
+    mixture = mixture(c(0, 1)), penalty = penalty(c(0, 5))
+  )
+
+rf_params <- extract_parameter_set_dials(rf_recipe) |>
+  update(
+    trees = trees(c(1, 250))
+  )
+
+svm_params <- extract_parameter_set_dials(svm_recipe) |>
+  update(
+    margin = svm_margin(c(0, 0.25))
+  )
+```
+
+```{r tidymodels-hyperopt-grid, include = TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE, output=TRUE, eval=TRUE}
+
+model_set <- model_set |>
+  option_add_parameters() |>
+  option_add(
+    param_info = lr_params,
+    id = "standard_lr"
+  ) |>
+  option_add(
+    param_info = rf_params,
+    id = "standard_rf"
+  ) |>
+  option_add(
+    param_info = svm_params,
+    id = "standard_svm"
+  ) 
+
+tuned_model_set <- model_set |>
+  workflow_map(
+    "tune_bayes", 
+    seed = 1000
+  )
+```
