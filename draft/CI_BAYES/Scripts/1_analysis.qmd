@@ -1,0 +1,1024 @@
+---
+title: "Causal Inference"
+subtitle: "Bayes tools"
+author: "Dr Tom Moore - Statistical Scientist"
+date: last-modified
+output-file: "analysis_report.html"
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Contents"
+    theme: united
+    highlight-style: tango
+    fig-width: 9
+    fig-height: 6
+    code-tools: true
+    code-fold: false
+    code-overflow: scroll
+    df-print: paged
+    embeded-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| results: false
+
+# Install packages and functions
+if (!requireNamespace("pak", quietly = TRUE)) {
+  install.packages("pak")
+}
+
+packages <- c(
+  "tidyverse", "here", "janitor", "readxl", "modelr",
+  "reshape2", "arrow", "pins", "usethis",
+  "ggtext", "forcats", "cowplot", "ggdendro",
+  "gplots", "GGally", "dagitty", "ggdag", "simDAG",
+  "future", "furrr", "rstan", "bnlearn", "Rgraphviz",
+  "brms", "bayesplot", "tidybayes", "cmdstanr",
+  "nadiv", "graph4lg", "marginaleffects", "bayesplot", "rethinking"
+)
+
+# Install missing packages with pak
+missing_pkgs <- packages[!sapply(packages, requireNamespace, quietly = TRUE)]
+if (length(missing_pkgs) > 0) {
+  pak::pkg_install(missing_pkgs, ask = FALSE)
+  cat("Installed:", paste(missing_pkgs, collapse = ", "), "\n")
+} else {
+  cat("All Packages Installed :) \n")
+}
+
+# Load all packages
+invisible(sapply(packages, library, character.only = TRUE))
+
+bayesplot::color_scheme_set("blue")                                    # Set color scheme
+options(mc.cores = parallel::detectCores())                            # Parallel Chains
+
+# Production Sever Settings
+cmdstanr::set_cmdstan_path("/powerplant/workspace/hrltxm/workbench-k8s/stan/vanilla_stan/cmdstan-2.36.0")
+```
+
+# Introduction
+
+- Without consideration of the causal structure underlying data, it is easy to draw incorrect conclusions.
+
+- Below is a simple example using a simulated dataset with four variables (Y, X, A, B).
+
+
+```{r}
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "",
+    "B" ~ ""
+  ))
+
+p1 <- ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("","1.10","","","-1.70","-1.90")),
+    color = "black", size = 5
+  ) +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+```
+
+
+::: {.callout-tip title="Simulated data" collapse="true"}
+```{r}
+#| label: Simulated data
+#| message: false
+
+dag <- empty_dag()
+
+dag <- dag + 
+  # parent nodes
+  node("a", type="rnorm", mean = 10, sd=4) +
+  
+  # child nodes
+  node("x", type="gaussian", parents=c("a"),     betas=c(3.6),
+       intercept=12,  error = 2) +
+  node("y", type="gaussian", parents=c("a","x"), betas=c(1.1, -1.7),
+       intercept=12,  error = 2) +
+  node("b", type="gaussian", parents=c("x","y"), betas=c(2.5, -1.9),
+       intercept=-15, error = 2) 
+
+set.seed(42)
+sim_dat <- sim_from_dag(dag=dag, n_sim=1000)
+
+head(sim_dat)
+```
+:::
+
+```{r}
+#| out-width: 100%
+#| fig-height: 4
+#| fig-width: 6
+#| warning: false
+#| echo: false
+
+p1
+```
+
+**Figure 1:** DAG of the simulated data that shows the relationships (arrows) between the outcome (Y), treatment (X), and other measured variables (A + B). The numbers on the arrows represent the known magnitude and direction of relationships with Y.
+
+::: {.callout-tip title="Under the hood" collapse="true"}
+```{r}
+#| out-width: 50%
+#| fig-height: 5
+#| fig-width: 6
+#| echo: false
+#| warning: false
+#| fig-show: hold
+#| results: false
+#| layout-ncol: 2
+
+sim_dat |>
+ggplot(aes(y = y, x = x, color = a)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c() +
+  xlim(-20,120) +
+  ylim(-150,20)
+  
+sim_dat |>
+ggplot(aes(y = y, x = x, color = b)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c() +
+  xlim(-20,120) +
+  ylim(-150,20)
+
+sim_dat |>
+ggplot(aes(y = x, x = a, color = b)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c()
+
+sim_dat |>
+ggplot(aes(y = y, x = a, color = b)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c()
+
+sim_dat |>
+ggplot(aes(y = b, x = x, color = a)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c()
+
+sim_dat |>
+ggplot(aes(y = b, x = y, color = a)) +
+  theme_classic() +
+  geom_jitter(width = 10, height = 10) +
+  geom_smooth(color = "black", method = "lm", formula = 'y ~ x') +
+  scale_color_viridis_c()
+```
+:::
+
+# Science before statistics
+
+- Most approaches fail to recover the simulated value of -1.70.
+
+::: {.panel-tabset}
+
+## Models
+
+```{r}
+#| label: models
+#| echo: true
+
+fit_brm <- function(formula, model_name) {
+  brm(formula,
+      family = gaussian(link = "identity"),
+      data = sim_dat,
+      file = paste0(here("Analysis/Models/", model_name)),
+      backend = "cmdstanr",
+      threads = threading(3),
+      silent = 0,
+      refresh = 500,
+      chains = 4,
+      cores = 4,
+      warmup = 2000,
+      iter = 4000)
+}
+
+# Models
+mod_1 <- fit_brm(y ~ x, "mod_1")         # Univariate
+mod_2 <- fit_brm(y ~ a, "mod_2")         # Univariate
+mod_3 <- fit_brm(y ~ b, "mod_3")         # Univariate
+mod_4 <- fit_brm(y ~ x + a + b, "mod_4") # Casual Salad
+mod_5 <- fit_brm(y ~ x + a, "mod_5")     # Confounder
+mod_6 <- fit_brm(y ~ x + b, "mod_6")     # Collider
+```
+
+## Output
+
+```{r}
+#| label: model-output
+#| echo: false
+#| 
+summary(mod_1)
+summary(mod_2)
+summary(mod_3)
+summary(mod_4)
+summary(mod_5)
+summary(mod_6)
+```
+
+## Validation
+
+```{r}
+#| label: validation
+#| echo: false
+#| message: false
+#| fig-show: hold
+#| results: false
+#| layout-ncol: 2
+#| fig.width: 4
+#| fig.height: 2
+
+pp_check(mod_1)
+pp_check(mod_2)
+pp_check(mod_3)
+pp_check(mod_4)
+pp_check(mod_5)
+pp_check(mod_6)
+```
+
+## Coefficients
+
+```{r}
+#| label: coefficients
+#| echo: false
+
+paste("mod_1:", round(summary(mod_1)$fixed$Estimate[[2]], 2))
+paste("mod_2:", round(summary(mod_2)$fixed$Estimate[[2]], 2))
+paste("mod_3:", round(summary(mod_3)$fixed$Estimate[[2]], 2))
+paste("mod_4: ", paste(round(summary(mod_4)$fixed$Estimate[2:4], 2), collapse = ", "))
+paste("mod_5:", round(summary(mod_5)$fixed$Estimate[[2]], 2))
+paste("mod_6:", round(summary(mod_6)$fixed$Estimate[[2]], 2))
+```
+
+## Stan code
+
+```{r}
+#| label: stan_1
+#| echo: false
+
+print("Example Stan code for mod_1")
+make_stancode(y ~ x, data = sim_dat, family = gaussian(link = "identity"))
+```
+
+:::
+
+```{r}
+#| out-width: 50%
+#| fig-height: 5
+#| fig-width: 6
+#| echo: false
+#| warning: false
+#| results: false
+#| layout-ncol: 2
+
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "",
+    "B" ~ ""
+  ))
+
+ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("","-5.04","","","-1.40","-0.27")),
+    color = "black", size = 5
+  ) +
+   ggtitle("Univariate \ny ~ x \ny ~ a \ny ~ b") +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "",
+    "B" ~ ""
+  ))
+
+ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("","0.15","","","0.71","-0.42")),
+    color = "black", size = 5
+  ) +
+  ggtitle("Multiple linear regression\n\"Causal salad\" \ny ~ x + a + b\n") +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "Confounder",
+    "B" ~ ""
+  ))
+
+ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("","","","","-1.72","")),
+    color = "black", size = 5
+  ) +
+  ggtitle("Confounder \ny ~ x + a \n\n") +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "",
+    "B" ~ "Collider"
+  ))
+
+ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("","","","","0.78","")),
+    color = "black", size = 5
+  ) +
+  ggtitle("Collider \ny ~ x + b \n\n") +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+```
+
+**Figure 2:** Various regression approaches to estimate the Y ~ X relationship (simulated value -1.71). Coefficients on arrows represent the estimated magnitude and direction of relationships. Conditioning on the confounder (A) returns the simulated value.
+
+# Everything, everywhere, all at once
+
+- Modeled as a series of structural equations that represent the data generating process.
+
+::: {.panel-tabset}
+
+## Models
+
+```{r}
+#| label: model_2
+#| echo: true
+
+# Model
+se_1 <- bf(x ~ a,     family = gaussian)
+se_2 <- bf(y ~ x + a, family = gaussian)
+se_3 <- bf(b ~ x + y, family = gaussian)
+
+mod_7 <- fit_brm(se_1 + se_2 + se_3 + set_rescor(FALSE), "mod_7") # Full Luxury Bayesian Inference
+```
+
+## Output
+
+```{r}
+#| label: model-output_2
+#| echo: false
+#| 
+summary(mod_7)
+```
+
+## Validation
+
+```{r}
+#| label: validation_2
+#| echo: false
+#| message: false
+#| fig-show: hold
+#| results: false
+#| layout-ncol: 3
+#| fig.width: 4
+#| fig.height: 2
+
+pp_check(mod_7, resp = "y")
+pp_check(mod_7, resp = "x")
+pp_check(mod_7, resp = "b")
+```
+
+## Coefficients
+
+```{r}
+#| label: coefficients_2
+#| echo: false
+
+summary(mod_7)$fixed
+```
+
+## Stan code
+
+```{r}
+#| label: stan_2
+#| echo: false
+
+make_stancode(se_1 + se_2 + se_3 + set_rescor(FALSE), data = sim_dat)
+```
+
+:::
+
+```{r}
+basic_dag <- dagify(
+  Y ~ X + A,
+  X ~ A,
+  B ~ X + Y,
+  exposure = "X",
+  outcome = "Y",
+  coords = list(
+    x = c(X = 1, Y = 3, A = 2, B = 2),
+    y = c(X = 1, Y = 1, A = 2, B = 0)
+  )
+)
+
+basic_dag_plot <- basic_dag |> 
+  tidy_dagitty() |> 
+  mutate(var_type = case_when(
+    name == "X" ~ "Exposure",
+    name == "Y" ~ "Outcome",
+    str_detect(name, "A") ~ "Confounder",
+    str_detect(name, "B") ~ "Collider"
+  )) |> 
+  mutate(var_label = case_match(name,
+    "X" ~ "Treatment",
+    "Y" ~ "Outcome",
+    "A" ~ "",
+    "B" ~ ""
+  ))
+
+ggplot(basic_dag_plot, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges() +
+  geom_dag_point(aes(color = var_type), size = 12) +
+  geom_richtext(
+    aes(label = name), fontface = "bold", color = "white",
+    fill = NA, label.color = NA,
+    label.padding = grid::unit(c(3, 0, 0, 0), "pt")
+  ) + 
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type != "Confounder"), aes(label = var_label), 
+    nudge_y = -0.25, color = "black", size = 11, size.unit = "pt"
+  ) +
+  geom_dag_text(
+    data = filter(basic_dag_plot, var_type == "Confounder"), aes(label = var_label), 
+    nudge_y = 0.26, color = "black", size = 11, size.unit = "pt"
+  ) +
+   geom_text(
+    aes(x = (x + xend) / 2, y = (y + yend + 0.4) / 2, label =  c("3.60","1.15","","2.45","-1.72","-1.93")),
+    color = "black", size = 5
+  ) +
+  scale_color_manual(values = c("#44AA99", "#6699CC", "#882255","#999933"), guide = "none") +
+  theme_dag()
+```
+
+# Genralised linear madness
+
+This analysis demonstrates science before statistics by incorporating prior knowledge in the modeling approach. Scientific phenomena are often modeled as linear relationships (i.e., generalized linear (mixed) models), which may not capture the data generating process.
+
+Fitting non-linear models such as logarithmic, polynomial curves, or splines may give us a good prediction of relationships, but doesn't allow us to estimate parameters of interest (e.g., maximum value or growth rate).
+
+## Data and Methods
+
+During my PhD, I measured the length and weight of ~3000 freshwater mussels (yes I'm that exciting!). I want to describe the relationship between length and weight between mussels collected inside macrophyte beds (aquatic plant beds: treatment) vs not (control) based on how the data was generated. 
+
+Although the length-weight relationship isn't technically a temporal relationship (even I'm not going to measure ~3000 mussels repeatedly over time), substituting time for space (length) will allow us to fit a models that estimate the: a) maximum weight; and b) growth rate. 
+
+To examine the relationship between the length and weight of freshwater mussels, generalized (non-)linear models were performed in R (R Core Team 2022) using the brms package (Bürkner, 2017). Linear, Gompertz (modified), and Logistic models were fitted with treatment (none vs macrophyte) as a predictor variable. A Gamma distribution was selected for the response since weight has positive and continuous values. Models were compared using leave-one-out cross validation and model validation was performed using prior and posterior predictive checks, as well as effective samples sizes and r-hats (McElreath, 2020).
+
+::: {.callout-tip title="Data" collapse="true"}
+```{r}
+df <- read_csv(here("Analysis/Data/Mussel_df_15.01.20.csv"), show_col_types = FALSE) # Import .csv file
+
+df <- df %>% dplyr::select(c(Length,Height,Width,Weight,Treatment,Macrophyte,Site))
+
+df <- df[complete.cases(df),]  # Select only complete cases
+
+head(df)
+```
+:::
+
+::: {.panel-tabset}
+
+### Prior linear
+
+```{r}
+mod_formula <- bf(Weight ~ 0 + Intercept + Length + Treatment)
+  
+priors <- c(prior(class = b, coef = Intercept, normal(0,1)),       # Intercept
+            prior(class = b, coef = TreatmentNone, normal(50,5)),  # Difference between treatments
+            prior(class = b, normal(0,10), lb = -10, ub = -2)      # Slope 
+            )
+
+# Priors
+nl_mod_1_priors <- brm(mod_formula, family = Gamma(link = "identity"),
+             prior = priors, 
+             sample_prior = "only", seed = 4,
+             data = df, file = paste0(here("Analysis/Models/NL_mod_1_priors_bad")),
+             threads = threading(threads = NULL, grainsize = 1250, static = FALSE),
+             backend = "cmdstanr", silent = 0, refresh = 100,
+             chains = 4, cores = 4, warmup = 1000, iter = 2000)
+
+conditional_effects(nl_mod_1_priors, effect = "Length", spaghetti = T, ndraws = 100)
+```
+
+### Prior Gompertz
+
+```{r}
+mod_formula <- bf(Weight ~ k * exp( -exp( -(r * (Length - delay)))),
+                  k + r + delay ~ 0 + Intercept + Treatment,
+                  nl = TRUE)
+  
+priors <- c(prior(nlpar = "k",     lb = 0, normal(50,20)),  # Max Weight 
+            prior(nlpar = "r",     lb = 0, normal(0,0.05)), # Growth Rate
+            prior(nlpar = "delay", lb = 0, normal(30,2))    # Delay across the x-axis 
+            )
+
+# Priors
+nl_mod_2_priors <- brm(mod_formula, family = Gamma(link = "identity"),
+             prior = priors, 
+             sample_prior = "only", seed = 4,
+             data = df, file = paste0(here("Analysis//Models/NL_mod_2_priors_good")),
+             threads = threading(threads = NULL, grainsize = 1250, static = FALSE),
+             backend = "cmdstanr", silent = 1, refresh = 100,
+             chains = 4, cores = 4, warmup = 1000, iter = 2000)
+
+conditional_effects(nl_mod_2_priors, effect = "Length", spaghetti = T, ndraws = 100)
+```
+
+### Prior logistic
+
+```{r}
+mod_formula <- bf(Weight ~ M / (1 + (M - mu0) / mu0 * exp( -b * Length)),
+                  mu0 + b + M ~ 0 + Intercept + Treatment,
+                  nl = TRUE)
+  
+priors <- c(prior(nlpar = "mu0", lb = 0, normal(0,0.1)),  # Weight at length zero
+            prior(nlpar = "b",   lb = 0, normal(0,0.1)),  # Growth rate
+            prior(nlpar = "M",   lb = 0, normal(50,20))   # Max Weight
+            )
+
+# Priors
+nl_mod_3_priors <- brm(mod_formula, family = Gamma(link = "identity"),
+             prior = priors, 
+             sample_prior = "only", seed = 4,
+             data = df, file = paste0(here("Analysis/Models/NL_mod_3_priors_good")),
+             threads = threading(threads = NULL, grainsize = 1250, static = FALSE),
+             backend = "cmdstanr", silent = 0, refresh = 100,
+             chains = 4, cores = 4, warmup = 1000, iter = 2000)
+
+conditional_effects(nl_mod_3_priors, effect = "Length", spaghetti = T, ndraws = 100)
+```
+
+### Models
+
+```{r}
+#| label: model_3
+#| echo: true
+
+fit_brm <- function(formula, model_name, priors) {
+  brm(formula,
+      family = Gamma(link = "identity"),
+      data = df,
+      prior = priors,
+      file = paste0(here("Analysis/Models/", model_name)),
+      backend = "cmdstanr",
+      threads = threading(3),
+      silent = 0,
+      refresh = 500,
+      chains = 4,
+      cores = 4,
+      warmup = 2000,
+      iter = 4000)
+}
+
+# Linear
+mod_formula <- bf(Weight ~ 0 + Intercept + Length + Treatment)     # Run with Gaussian family 
+  
+priors <- c(prior(class = b, coef = Intercept, normal(0,1)),       # Intercept
+            prior(class = b, coef = TreatmentNone, normal(50,5)),  # Difference between treatments
+            prior(class = b, normal(0,10), lb = -10, ub = -2)      # Slope 
+            )
+
+nl_mod_1 <- fit_brm(mod_formula, "NL_mod_1", priors)
+
+# Gompertz
+mod_formula <- bf(Weight ~ k * exp( -exp( -(r * (Length - delay)))),
+                  k + r + delay ~ 0 + Intercept + Treatment,
+                  nl = TRUE)
+  
+priors <- c(prior(nlpar = "k",     lb = 0, normal(50,20)),  # Max Weight 
+            prior(nlpar = "r",     lb = 0, normal(0,0.05)), # Growth Rate
+            prior(nlpar = "delay", lb = 0, normal(30,2))    # Delay across the x-axis 
+            )
+
+nl_mod_2 <- fit_brm(mod_formula, "NL_mod_2", priors)
+
+# Logistic
+mod_formula <- bf(Weight ~ M / (1 + (M - mu0) / mu0 * exp( -b * Length)),
+                  mu0 + b + M ~ 0 + Intercept + Treatment,
+                  nl = TRUE)
+  
+priors <- c(prior(nlpar = "mu0", lb = 0, normal(0,0.1)),  # Weight at length zero
+            prior(nlpar = "b",   lb = 0, normal(0,0.1)),  # Growth rate
+            prior(nlpar = "M",   lb = 0, normal(50,20))   # Max Weight
+            )
+
+nl_mod_3 <- fit_brm(mod_formula, "NL_mod_3", priors)
+```
+
+### Output
+
+```{r}
+#| label: model-output_3
+#| echo: false
+#| 
+summary(nl_mod_1)
+summary(nl_mod_2)
+summary(nl_mod_3)
+```
+
+
+### Validation
+
+```{r}
+#| label: validation_3
+#| echo: false
+#| message: false
+#| fig-show: hold
+#| results: false
+#| layout-ncol: 2
+#| fig.width: 4
+#| fig.height: 2
+
+pp_check(nl_mod_1)
+pp_check(nl_mod_2)
+pp_check(nl_mod_3)
+```
+
+### Plot linear
+
+```{r, echo=FALSE}
+df %>%
+  group_by(Treatment) %>%
+  data_grid(Length = seq_range(Length, n = 101)) %>%
+  add_epred_draws(nl_mod_1, ndraws = 100) %>%
+  ggplot(aes(x = Length, y = Weight, color = Treatment)) +
+  theme_classic() +
+  geom_point(data = df, alpha = 0.25) +
+  geom_line(aes(y = .epred, group = paste(Treatment, .draw)), alpha = .1, color = "grey50") +
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10)) +
+  scale_y_continuous(limits = c(-100,100), breaks = seq(-100,100,10)) +
+  facet_wrap(~Treatment) +
+  scale_color_brewer(palette = "Dark2")
+```
+
+### Plot Gompertz
+
+```{r, echo=FALSE}
+df %>%
+  group_by(Treatment) %>%
+  data_grid(Length = seq_range(Length, n = 101)) %>%
+  add_epred_draws(nl_mod_2, ndraws = 100) %>%
+  ggplot(aes(x = Length, y = Weight, color = Treatment)) +
+  theme_classic() +
+  geom_point(data = df, alpha = 0.25) +
+  geom_line(aes(y = .epred, group = paste(Treatment, .draw)), alpha = .1, color = "grey50") +
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10)) +
+  scale_y_continuous(limits = c(0,80), breaks = seq(0,80,10)) +
+  facet_wrap(~Treatment) +
+  scale_color_brewer(palette = "Dark2")
+```
+
+### Plot Logistic
+
+```{r, echo=FALSE}
+df %>%
+  group_by(Treatment) %>%
+  data_grid(Length = seq_range(Length, n = 101)) %>%
+  add_epred_draws(nl_mod_3, ndraws = 100) %>%
+  ggplot(aes(x = Length, y = Weight, color = Treatment)) +
+  theme_classic() +
+  geom_point(data = df, alpha = 0.25) +
+  geom_line(aes(y = .epred, group = paste(Treatment, .draw)), alpha = .1, color = "grey50") +
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10)) +
+  scale_y_continuous(limits = c(0,80), breaks = seq(0,80,10)) +
+  facet_wrap(~Treatment) +
+  scale_color_brewer(palette = "Dark2")
+```
+
+### Model comparison
+
+```{r}
+loo(nl_mod_1, nl_mod_2, nl_mod_3)
+```
+
+### Stan code
+
+```{r}
+#| label: stan_3
+#| echo: false
+
+mod_formula <- bf(Weight ~ k * exp( -exp( -(r * (Length - delay)))),
+                  k + r + delay ~ 0 + Intercept + Treatment,
+                  nl = TRUE)
+  
+priors <- c(prior(nlpar = "k",     lb = 0, normal(50,20)),  # Max Weight 
+            prior(nlpar = "r",     lb = 0, normal(0,0.05)), # Growth Rate
+            prior(nlpar = "delay", lb = 0, normal(30,2))    # Delay across the x-axis 
+            )
+
+make_stancode(
+  formula = mod_formula,
+  data = df,
+  prior = priors,
+  family = Gamma(link = "identity")
+)
+```
+
+:::
+
+## Conclusion
+
+Models can be used to estimate parameters of interest that better capture data generating process based on ecological theory. 
+
+Prior information can be useful in constraining models to realistic estimates.
+
+Here the Gompertz and logistic models estimated the growth rate to be 0.03 and 0.10 and maximum weight to be 115 (g) and 50.0 (g), respectively. 
+
+### Food for thought: 
+
+Which model is the best at capturing the data generating process?
+ 
+Could ecological theory informed techniques be applied to your own research? 
+
+# Beyond brms: in space
+
+This section demonstrates the use of Stan to fit a choice model based on the hidden minds and observed behavior data example from McElreath (2020). The model estimates the probability of choosing a particular option based on the majority and minority choices, as well as the maverick and random choices.
+
+The five stratergies are: 
+
+- Follow the Majority: Copy the majority demonstrated color.
+- Follow the Minority: Copy the minority demonstrated color.
+- Maverick: Choose the color that no demonstrator chose.
+- Random: Choose a color at random, ignoring the demonstrators.
+- Follow First: Copy the color that was demonstrated first. This was either the majority color (when majority_first equals 1) or the minority color (when 0). (p. 533)
+
+::: {.panel-tabset}
+
+```{r}
+Sys.setenv(CMDSTAN = cmdstanr::set_cmdstan_path("/powerplant/workspace/hrltxm/workbench-k8s/stan/vanilla_stan/cmdstan-2.36.0"))
+
+data(Boxes, package = "rethinking")
+
+df_ss <- Boxes # hidden minds and observed behavior data example
+
+# prep data 
+dat_list <- list(
+  N = nrow(df_ss),
+  y = df_ss$y,
+  majority_first = df_ss$majority_first)
+
+
+choice_model_1 <- readLines(here("Scripts/choice_model_1.stan"))
+
+choice_mod_1 <-
+  rstan::stan(model_code = choice_model_1, 
+       data = dat_list, 
+       chains = 3, cores = 3)
+```
+
+### Stan - Model
+
+```{r}
+#| echo: false
+#| results: asis
+
+cat(readLines(here("Scripts/choice_model_1.stan")), sep = "\n")
+```
+
+### Output
+
+```{r}
+#| label: model_output_3
+
+print(choice_mod_1, pars = c("p"), digits = 3)
+```
+
+### Plot
+
+```{r}
+#| label: plot_3
+#| fig.height: 3
+
+label <- c("Majority~(italic(s)[1])", 
+           "Minority~(italic(s)[2])",
+           "Maverick~(italic(s)[3])", 
+           "Random~(italic(s)[4])", 
+           "Follow~First~(italic(s)[5])")
+
+rethinking::precis(choice_mod_1, depth = 2) %>% 
+  data.frame() %>% 
+  mutate(name = factor(label, levels = label)) %>% 
+  mutate(name = fct_rev(name)) %>% 
+  
+  ggplot(aes(x = mean, xmin = X5.5., xmax = X94.5., y = name)) +
+  theme_bw() +
+  geom_vline(xintercept = .2, linewidth = 1/4, linetype = 2) +
+  geom_pointrange(linewidth = 1/4, fatten = 6/4) +
+  scale_x_continuous(expression(italic(p[s])), limits = c(0, 1),
+                     breaks = 0:5 / 5) +
+  scale_y_discrete(NULL, labels = ggplot2:::parse_safe) +
+  theme(axis.text.y = element_text(hjust = 0))
+```
+:::
+
+# References
+
+McElreath, R. (2020). Statistical rethinking: A Bayesian course with examples in R and Stan. Chapman and Hall/CRC.
+
+R Core Team (2022). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. <https://www.R-project.org/>
+
+::: {.callout-tip title="Session Information" collapse="true"}
+```{r}
+#| label: session-info
+
+utils::sessionInfo()
+``` 
