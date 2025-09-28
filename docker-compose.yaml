@@ -82,6 +82,21 @@ services:
     ports:
       - 3838:3838
 
+  rstudio:
+    image: ghcr.io/plant-food-research-open/rstudio-rpipelines:${APP_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: ./dockerfiles/rstudio/Dockerfile.${APP_VERSION}
+      args:
+        BUILD_DATE: date -u +'%Y-%m-%dT%H:%M:%SZ'
+        APP_VERSION: ${APP_VERSION:-latest}
+      tags:
+        - ghcr.io/plant-food-research-open/rstudio-rpipelines:latest
+    restart: always
+    stop_grace_period: 10s
+    ports:
+      - 8787:8787
+
   mlflow:
     image: ghcr.io/plant-food-research-open/mlflow-rpipelines:${APP_VERSION:-latest}
     build:
