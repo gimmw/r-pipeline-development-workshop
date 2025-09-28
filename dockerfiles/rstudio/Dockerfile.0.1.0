@@ -77,8 +77,24 @@ RUN chown -R shiny:shiny /app \
     && chmod -R 755 /app \
     && R -e "cmdstanr::install_cmdstan()"
 
-EXPOSE 3838
+WORKDIR /tmp
+## kubectl
+RUN wget https://dl.k8s.io/release/v1.34.0/bin/linux/amd64/kubectl \
+    && install kubectl /usr/bin
 
-EXPOSE 8088
+## s5cmd
+RUN wget https://github.com/peak/s5cmd/releases/download/v2.3.0/s5cmd_2.3.0_Linux-64bit.tar.gz \
+    && tar xvzf s5cmd_2.3.0_Linux-64bit.tar.gz \
+    && install s5cmd /usr/bin
 
-CMD ["R", "-e", "shiny::runApp('/app', launch.browser = FALSE, host = '0.0.0.0', port = 3838)"]
+RUN rm -rf /tmp/*
+
+WORKDIR /home/rstudio
+ENV R_LIBS="/home/rstudio/R/library:/usr/local/lib/R/site-library:/usr/local/lib/R/library"
+
+#EXPOSE 3838
+#EXPOSE 8088
+EXPOSE 8787
+
+#CMD ["R", "-e", "shiny::runApp('/app', launch.browser = FALSE, host = '0.0.0.0', port = 3838)"]
+CMD ["/init"]
