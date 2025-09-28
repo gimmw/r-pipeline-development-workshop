@@ -34,3 +34,7 @@ jobs:
         run: |
           docker compose build shiny
           docker compose push shiny
+      - name: Docker push rstudio
+        run: |
+          docker compose build rstudio
+          docker compose push rstudio
